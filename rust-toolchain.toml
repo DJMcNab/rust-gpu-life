@@ -1,0 +1,5 @@
+# Keep up to date with https://github.com/EmbarkStudios/rust-gpu/blob/main/rust-toolchain
+
+[toolchain]
+channel = "nightly-2021-05-24"
+components = ["rust-src", "rustc-dev", "llvm-tools-preview"]
