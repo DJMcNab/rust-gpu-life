@@ -58,8 +58,14 @@ fn input_at(input: &[u8], size: BoardSize, position: UVec2, direction: Direction
 }
 
 fn compute_life_tile(input: &[u8], size: BoardSize, position: UVec2) -> bool {
-    let at = |direction| input_at(input, size, position, direction);
-    let total = at(Up) + at(Down) + at(Left) + at(Right) + at(UR) + at(DR) + at(DL) + at(UL);
+    let total = input_at(input, size, position, Up)
+        + input_at(input, size, position, Down)
+        + input_at(input, size, position, Left)
+        + input_at(input, size, position, Right)
+        + input_at(input, size, position, UR)
+        + input_at(input, size, position, DR)
+        + input_at(input, size, position, DL)
+        + input_at(input, size, position, UL);
 
     total >= 3 && total <= 5
 }
@@ -67,9 +73,9 @@ fn compute_life_tile(input: &[u8], size: BoardSize, position: UVec2) -> bool {
 #[spirv(compute(threads(32, 32, 1)))]
 pub fn life_step(
     #[spirv(global_invocation_id)] id: UVec3,
-    #[spirv(uniform)] board_size: &BoardSize,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] input_data: &[u8],
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] output_data: &mut [u8],
+    #[spirv(uniform, descriptor_set = 0, binding = 0)] board_size: &BoardSize,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] input_data: &[u8],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] output_data: &mut [u8],
 ) {
     let pos = id.truncate();
     let size = BoardSize {
