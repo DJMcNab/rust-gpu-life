@@ -1,5 +1,5 @@
 [package]
-name = "rust-gpu-life-shaders"
+name = "shaders"
 version = "0.0.1"
 authors = ["Daniel McNab <36049421+DJMcNab@users.noreply.github.com>"]
 edition = "2018"
@@ -12,3 +12,4 @@ crate-type = ["dylib"]
 [dependencies]
 spirv-std = { git = "https://github.com/EmbarkStudios/rust-gpu", rev = "6019f391ec8d8caec3c7a16235322aca036e2d03" }
 glam = { version = "0.14", default-features = false, features = ["libm", "scalar-math", "spirv-std"] }
+interface = { path = "../interface" }

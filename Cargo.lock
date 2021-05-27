@@ -125,6 +125,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "interface"
+version = "0.1.0"
+
+[[package]]
 name = "itoa"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -240,14 +244,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rust-gpu-life-shaders"
-version = "0.0.1"
-dependencies = [
- "glam",
- "spirv-std 0.4.0-alpha.7 (git+https://github.com/EmbarkStudios/rust-gpu?rev=6019f391ec8d8caec3c7a16235322aca036e2d03)",
-]
-
-[[package]]
 name = "rustc-demangle"
 version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -320,6 +316,15 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
+]
+
+[[package]]
+name = "shaders"
+version = "0.0.1"
+dependencies = [
+ "glam",
+ "interface",
+ "spirv-std 0.4.0-alpha.7 (git+https://github.com/EmbarkStudios/rust-gpu?rev=6019f391ec8d8caec3c7a16235322aca036e2d03)",
 ]
 
 [[package]]
