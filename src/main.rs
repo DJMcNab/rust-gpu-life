@@ -1,4 +1,4 @@
-use spirv_builder::SpirvBuilder;
+use spirv_builder::{CompileResult, SpirvBuilder};
 
 use winit::{
     event::*,
@@ -11,16 +11,27 @@ use futures::executor::block_on;
 use rust_gpu_life::State;
 
 fn main() {
-    let _ = SpirvBuilder::new("./shaders", "spirv-unknown-vulkan1.2")
-        .capability(spirv_builder::Capability::Int8)
-        .print_metadata(false)
-        .build();
-
     env_logger::init();
+    let (shadertx, shaderrx) = std::sync::mpsc::sync_channel::<CompileResult>(0);
+    let (rebuildtx, rebuildrx) = std::sync::mpsc::sync_channel(1);
+    let _ = std::thread::spawn(move || loop {
+        rebuildrx.recv().unwrap();
+        let compilation_result = SpirvBuilder::new("./shaders", "spirv-unknown-vulkan1.2")
+            .capability(spirv_builder::Capability::Int8)
+            .print_metadata(false)
+            .build();
+        match compilation_result {
+            Ok(res) => shadertx.send(res).unwrap(),
+            Err(err) => println!("Shader compilation failed with error {}", err),
+        }
+    });
+    rebuildtx.send(()).unwrap();
+    let initial_shader = shaderrx.recv().unwrap();
+
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
     // Since main can't be async, we're going to need to block
-    let mut state = block_on(State::new(&window));
+    let mut state = block_on(State::new(&window, initial_shader));
     event_loop.run(move |event, _, control_flow| match event {
         Event::WindowEvent {
             ref event,
@@ -50,6 +61,15 @@ fn main() {
             }
         }
         Event::RedrawRequested(_) => {
+            match shaderrx.try_recv() {
+                Ok(res) => state.update_pipelines(res),
+                Err(err) => match err {
+                    std::sync::mpsc::TryRecvError::Empty => (),
+                    std::sync::mpsc::TryRecvError::Disconnected => {
+                        panic!("Background building thread broke")
+                    }
+                },
+            }
             state.update();
             match state.render() {
                 Ok(_) => {}

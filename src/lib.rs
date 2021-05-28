@@ -1,3 +1,7 @@
+use std::borrow::Cow;
+
+use spirv_builder::CompileResult;
+
 use winit::window::Window;
 
 pub struct State {
@@ -7,12 +11,13 @@ pub struct State {
     sc_desc: wgpu::SwapChainDescriptor,
     swap_chain: wgpu::SwapChain,
     size: winit::dpi::PhysicalSize<u32>,
+    render_pipeline: wgpu::RenderPipeline,
     clear_colour: wgpu::Color,
 }
 
 impl State {
     // Creating some of the wgpu types requires async code
-    pub async fn new(window: &Window) -> Self {
+    pub async fn new(window: &Window, shaders: CompileResult) -> Self {
         let size = window.inner_size();
 
         // The instance is a handle to our GPU
@@ -44,6 +49,7 @@ impl State {
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
         };
+        let pipeline = State::pipelines_from(shaders, &device, &sc_desc);
         let swap_chain = device.create_swap_chain(&surface, &sc_desc);
         Self {
             surface,
@@ -53,7 +59,73 @@ impl State {
             swap_chain,
             size,
             clear_colour: wgpu::Color::default(),
+            render_pipeline: pipeline,
         }
+    }
+
+    fn pipelines_from(
+        compilation: CompileResult,
+        device: &wgpu::Device,
+        sc_desc: &wgpu::SwapChainDescriptor,
+    ) -> wgpu::RenderPipeline {
+        let data = std::fs::read(compilation.module.unwrap_single()).unwrap();
+        let spirv = wgpu::util::make_spirv(&data);
+        let source = match spirv {
+            wgpu::ShaderSource::Wgsl(cow) => wgpu::ShaderSource::Wgsl(Cow::Owned(cow.into_owned())),
+            wgpu::ShaderSource::SpirV(cow) => {
+                wgpu::ShaderSource::SpirV(Cow::Owned(cow.into_owned()))
+            }
+        };
+        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+            label: Some("Life Shaders"),
+            source,
+            flags: wgpu::ShaderFlags::default(),
+        });
+        let render_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Render Pipeline Layout"),
+                bind_group_layouts: &[],
+                push_constant_ranges: &[],
+            });
+        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Render Pipeline"),
+            layout: Some(&render_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "main_vs",
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "main_fs",
+                targets: &[wgpu::ColorTargetState {
+                    format: sc_desc.format,
+                    write_mask: wgpu::ColorWrite::ALL,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                }],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
+                polygon_mode: wgpu::PolygonMode::Fill,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+        });
+        render_pipeline
+    }
+
+    pub fn update_pipelines(&mut self, compilation: CompileResult) {
+        let pipelines = State::pipelines_from(compilation, &self.device, &self.sc_desc);
+        self.render_pipeline = pipelines;
     }
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
