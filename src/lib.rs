@@ -69,17 +69,11 @@ impl State {
         sc_desc: &wgpu::SwapChainDescriptor,
     ) -> wgpu::RenderPipeline {
         let data = std::fs::read(compilation.module.unwrap_single()).unwrap();
-        let spirv = wgpu::util::make_spirv(&data);
-        let source = match spirv {
-            wgpu::ShaderSource::Wgsl(cow) => wgpu::ShaderSource::Wgsl(Cow::Owned(cow.into_owned())),
-            wgpu::ShaderSource::SpirV(cow) => {
-                wgpu::ShaderSource::SpirV(Cow::Owned(cow.into_owned()))
-            }
-        };
+        let source = wgpu::util::make_spirv(&data);
         let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
             label: Some("Life Shaders"),
             source,
-            flags: wgpu::ShaderFlags::default(),
+            flags: wgpu::ShaderFlags::all(),
         });
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
