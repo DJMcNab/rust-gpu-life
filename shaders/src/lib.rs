@@ -11,7 +11,7 @@ use interface::BoardSize;
 #[cfg(not(target_arch = "spirv"))]
 use spirv_std::macros::spirv;
 
-use glam::{uvec2, vec3, vec4, UVec2, UVec3, Vec4, Vec4Swizzles};
+use glam::{uvec2, vec3, vec4, UVec2, UVec3, Vec4};
 
 #[repr(u8)]
 enum Direction {
