@@ -11,7 +11,7 @@ use interface::BoardSize;
 #[cfg(not(target_arch = "spirv"))]
 use spirv_std::macros::spirv;
 
-use glam::{uvec2, vec4, UVec2, UVec3, Vec4};
+use glam::{uvec2, vec3, vec4, UVec2, UVec3, Vec4, Vec4Swizzles};
 
 #[repr(u8)]
 enum Direction {
@@ -77,6 +77,26 @@ pub fn life_step(
         height: board_size.height,
     };
     output_data[index_of_pos(pos, size)] = compute_life_tile(input_data, size, id.truncate()) as u8;
+}
+
+#[spirv(vertex)]
+pub fn main_vs_colour(
+    #[spirv(vertex_index)] in_vertex_index: u32,
+    #[spirv(position)] clip_position: &mut Vec4,
+    output_color: &mut Vec4,
+) {
+    let x = (1 - in_vertex_index as i32) as f32 * 0.5;
+    let y = ((in_vertex_index & 1) as i32 * 2 - 1) as f32 * 0.5;
+    let pos = vec4(x, y, 0., 1.);
+    *clip_position = pos;
+    let pos = pos + Vec4::X + Vec4::Y;
+    let out = vec3(pos.x, pos.y, pos.z) + vec3(pos.z, pos.x, pos.z);
+    *output_color = (out.exp() - out.exp().floor()).extend(0.);
+}
+
+#[spirv(fragment)]
+pub fn main_fs_colour(#[spirv(position)] _in_position: Vec4, input: Vec4, output: &mut Vec4) {
+    *output = input;
 }
 
 #[spirv(vertex)]

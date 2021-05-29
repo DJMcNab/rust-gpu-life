@@ -1,6 +1,20 @@
 use spirv_builder::CompileResult;
 
-use winit::window::Window;
+use winit::{
+    event::{ElementState, VirtualKeyCode, WindowEvent},
+    window::Window,
+};
+
+enum CurrentRenderPipeline {
+    Colour,
+    // See also: https://www.youtube.com/watch?v=wh4aWZRtTwU
+    Brown,
+}
+
+pub struct Pipelines {
+    brown_render_pipeline: wgpu::RenderPipeline,
+    colour_render_pipeline: wgpu::RenderPipeline,
+}
 
 pub struct State {
     surface: wgpu::Surface,
@@ -9,8 +23,10 @@ pub struct State {
     sc_desc: wgpu::SwapChainDescriptor,
     swap_chain: wgpu::SwapChain,
     size: winit::dpi::PhysicalSize<u32>,
-    render_pipeline: wgpu::RenderPipeline,
     clear_colour: wgpu::Color,
+
+    pipelines: Pipelines,
+    current_render_pipeline: CurrentRenderPipeline,
 }
 
 impl State {
@@ -47,7 +63,7 @@ impl State {
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
         };
-        let pipeline = State::pipelines_from(shaders, &device, &sc_desc);
+        let pipelines = State::pipelines_from(shaders, &device, &sc_desc);
         let swap_chain = device.create_swap_chain(&surface, &sc_desc);
         Self {
             surface,
@@ -57,7 +73,8 @@ impl State {
             swap_chain,
             size,
             clear_colour: wgpu::Color::default(),
-            render_pipeline: pipeline,
+            pipelines,
+            current_render_pipeline: CurrentRenderPipeline::Brown,
         }
     }
 
@@ -65,7 +82,7 @@ impl State {
         compilation: CompileResult,
         device: &wgpu::Device,
         sc_desc: &wgpu::SwapChainDescriptor,
-    ) -> wgpu::RenderPipeline {
+    ) -> Pipelines {
         let data = std::fs::read(compilation.module.unwrap_single()).unwrap();
         let source = wgpu::util::make_spirv(&data);
         let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
@@ -79,45 +96,83 @@ impl State {
                 bind_group_layouts: &[],
                 push_constant_ranges: &[],
             });
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: "main_vs",
-                buffers: &[],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: "main_fs",
-                targets: &[wgpu::ColorTargetState {
-                    format: sc_desc.format,
-                    write_mask: wgpu::ColorWrite::ALL,
-                    blend: Some(wgpu::BlendState::REPLACE),
-                }],
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
-                polygon_mode: wgpu::PolygonMode::Fill,
-                ..Default::default()
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-        });
-        render_pipeline
+        let brown_render_pipeline =
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("Render Pipeline"),
+                layout: Some(&render_pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: "main_vs",
+                    buffers: &[],
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: "main_fs",
+                    targets: &[wgpu::ColorTargetState {
+                        format: sc_desc.format,
+                        write_mask: wgpu::ColorWrite::ALL,
+                        blend: Some(wgpu::BlendState::REPLACE),
+                    }],
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    strip_index_format: None,
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: Some(wgpu::Face::Back),
+                    // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
+                    polygon_mode: wgpu::PolygonMode::Fill,
+                    ..Default::default()
+                },
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState {
+                    count: 1,
+                    mask: !0,
+                    alpha_to_coverage_enabled: false,
+                },
+            });
+        let colour_render_pipeline =
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("Render Pipeline"),
+                layout: Some(&render_pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: "main_vs_colour",
+                    buffers: &[],
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: "main_fs_colour",
+                    targets: &[wgpu::ColorTargetState {
+                        format: sc_desc.format,
+                        write_mask: wgpu::ColorWrite::ALL,
+                        blend: Some(wgpu::BlendState::REPLACE),
+                    }],
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    strip_index_format: None,
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: Some(wgpu::Face::Back),
+                    // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
+                    polygon_mode: wgpu::PolygonMode::Fill,
+                    ..Default::default()
+                },
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState {
+                    count: 1,
+                    mask: !0,
+                    alpha_to_coverage_enabled: false,
+                },
+            });
+        Pipelines {
+            brown_render_pipeline,
+            colour_render_pipeline,
+        }
     }
 
     pub fn update_pipelines(&mut self, compilation: CompileResult) {
         let pipelines = State::pipelines_from(compilation, &self.device, &self.sc_desc);
-        self.render_pipeline = pipelines;
+        self.pipelines = pipelines;
     }
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -127,9 +182,9 @@ impl State {
         self.swap_chain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
     }
 
-    pub fn input(&mut self, event: &winit::event::WindowEvent) -> bool {
+    pub fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
-            winit::event::WindowEvent::CursorMoved { position, .. } => {
+            WindowEvent::CursorMoved { position, .. } => {
                 self.clear_colour = wgpu::Color {
                     r: position.x / f64::from(self.size.width),
                     g: position.y / f64::from(self.size.height),
@@ -138,11 +193,33 @@ impl State {
                 };
                 false
             }
+            WindowEvent::KeyboardInput {
+                input:
+                    winit::event::KeyboardInput {
+                        virtual_keycode: Some(VirtualKeyCode::Space),
+                        state: ElementState::Pressed,
+                        ..
+                    },
+                ..
+            } => {
+                self.current_render_pipeline = match self.current_render_pipeline {
+                    CurrentRenderPipeline::Colour => CurrentRenderPipeline::Brown,
+                    CurrentRenderPipeline::Brown => CurrentRenderPipeline::Colour,
+                };
+                false
+            }
             _ => false,
         }
     }
 
     pub fn update(&mut self) {}
+
+    fn current_render_pipeline(&self) -> &wgpu::RenderPipeline {
+        match self.current_render_pipeline {
+            CurrentRenderPipeline::Colour => &self.pipelines.colour_render_pipeline,
+            CurrentRenderPipeline::Brown => &self.pipelines.brown_render_pipeline,
+        }
+    }
 
     pub fn render(&mut self) -> Result<(), wgpu::SwapChainError> {
         let frame = self.swap_chain.get_current_frame()?.output;
@@ -164,8 +241,9 @@ impl State {
                 }],
                 depth_stencil_attachment: None,
             });
-            render_pass.set_pipeline(&self.render_pipeline); // 2.
-            render_pass.draw(0..3, 0..1); // 3.
+
+            render_pass.set_pipeline(&self.current_render_pipeline());
+            render_pass.draw(0..3, 0..1);
         }
 
         // submit will accept anything that implements IntoIter
