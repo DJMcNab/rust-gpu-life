@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use spirv_builder::CompileResult;
 
 use winit::window::Window;
