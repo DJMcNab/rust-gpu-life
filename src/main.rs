@@ -1,3 +1,5 @@
+use std::sync::mpsc::TrySendError;
+
 use spirv_builder::{CompileResult, SpirvBuilder};
 
 use winit::{
@@ -10,10 +12,12 @@ use futures::executor::block_on;
 
 use rust_gpu_life::State;
 
+struct Rebuild;
+
 fn main() {
     env_logger::init();
     let (shadertx, shaderrx) = std::sync::mpsc::sync_channel::<CompileResult>(0);
-    let (rebuildtx, rebuildrx) = std::sync::mpsc::sync_channel(1);
+    let (rebuildtx, rebuildrx) = std::sync::mpsc::sync_channel(0);
     let _ = std::thread::spawn(move || loop {
         rebuildrx.recv().unwrap();
         let compilation_result = SpirvBuilder::new("./shaders", "spirv-unknown-vulkan1.2")
@@ -25,7 +29,7 @@ fn main() {
             Err(err) => println!("Shader compilation failed with error {}", err),
         }
     });
-    rebuildtx.send(()).unwrap();
+    rebuildtx.send(Rebuild).unwrap();
     let initial_shader = shaderrx.recv().unwrap();
 
     let event_loop = EventLoop::new();
@@ -46,6 +50,14 @@ fn main() {
                             virtual_keycode: Some(VirtualKeyCode::Escape),
                             ..
                         } => *control_flow = ControlFlow::Exit,
+                        KeyboardInput {
+                            state: ElementState::Pressed,
+                            virtual_keycode: Some(VirtualKeyCode::R),
+                            ..
+                        } => match rebuildtx.try_send(Rebuild) {
+                            Ok(_) | Err(TrySendError::Full(_)) => (),
+                            Err(TrySendError::Disconnected(_)) => panic!(),
+                        },
                         _ => {}
                     },
                     WindowEvent::Resized(physical_size) => {
