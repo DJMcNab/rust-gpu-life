@@ -60,8 +60,9 @@ fn input_at(input: &[u8], size: BoardSize, position: UVec2, direction: Direction
 fn compute_life_tile(input: &[u8], size: BoardSize, position: UVec2) -> bool {
     let at = move |direction| input_at(input, size, position, direction);
     let total = at(Up) + at(Down) + at(Left) + at(Right) + at(UR) + at(DR) + at(DL) + at(UL);
+    let alive = input[index_of_pos(position, size)] == 1;
 
-    total >= 3 && total <= 5
+    alive && (total == 2 || total == 3) || !alive && total == 3
 }
 
 #[spirv(compute(threads(32, 32, 1)))]
